@@ -9,8 +9,8 @@ app = Flask(__name__)
 def home():
     return "Bot is alive and running!"
 
-# --- 2. سحب توكن البوت بأمان من إعدادات المنصة (Environment Variables) ---
-TOKEN = os.environ.get("BOT_TOKEN")
+# --- 2. توكن البوت الصحيح الخاص بك ---
+TOKEN = "9189528366:AAE0LTM-26urghvNYXr7nagmrEfSNPJ3d3s"
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
