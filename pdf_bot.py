@@ -9,15 +9,15 @@ app = Flask(__name__)
 def home():
     return "Bot is alive and running!"
 
-# --- 2. كود بوت تيليجرام ---
-TOKEN = "YOUR_BOT_TOKEN"  # استبدل هذا بتوكن البوت الخاص بك
+# --- 2. سحب توكن البوت بأمان من إعدادات المنصة (Environment Variables) ---
+TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     bot.reply_to(message, "مرحباً بك! أرسل لي الصور وسأقوم بتحويلها إلى ملف PDF.")
 
-# تشغيل البوت في الخلفية باستخدام Webhook أو Polling (سنستخدم Polling مع خيط منفصل لتشغيل Flask جنباً إلى جنب)
+# تشغيل البوت في خلفية الكود باستخدام خيط منفصل (Thread)
 import threading
 def run_bot():
     print("Bot is starting polling...")
