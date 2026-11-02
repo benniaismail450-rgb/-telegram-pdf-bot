@@ -1,6 +1,9 @@
 import os
 import telebot
 from flask import Flask
+import img2pdf
+from PIL import Image
+import io
 
 # --- 1. إعداد تطبيق Flask الخفيف لفتح البورت فوراً ---
 app = Flask(__name__)
@@ -15,7 +18,29 @@ bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "مرحباً بك! أرسل لي الصور وسأقوم بتحويلها إلى ملف PDF.")
+    bot.reply_to(message, "مرحباً بك! أرسل لي الصور (أو مجموعة صور) وسأقوم بتحويلها إلى ملف PDF.")
+
+# معالجة الصور المرسلة من المستخدم
+@bot.message_handler(content_types=['photo'])
+def handle_photos(message):
+    try:
+        bot.reply_to(message, "جاري معالجة الصورة وتحويلها إلى PDF، ريثما أنتهي...")
+        
+        # الحصول على أعلى دقة للصورة المرسلة
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        # حفظ الصورة مؤقتة أو معالجتها في الذاكرة
+        image = Image.open(io.BytesIO(downloaded_file))
+        
+        # تحويل الصورة إلى PDF باستخدام img2pdf
+        pdf_bytes = img2pdf.convert(downloaded_file)
+        
+        # إرسال ملف الـ PDF الناتج للمستخدم
+        bot.send_document(message.chat.id, pdf_bytes, visible_file_name="converted_image.pdf")
+        
+    except Exception as e:
+        bot.reply_to(message, f"حدث خطأ أثناء المعالجة: {e}")
 
 # تشغيل البوت في خلفية الكود باستخدام خيط منفصل (Thread)
 import threading
