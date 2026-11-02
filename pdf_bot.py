@@ -4,6 +4,7 @@ from flask import Flask
 import img2pdf
 from PIL import Image
 import io
+import threading
 
 # --- 1. إعداد تطبيق Flask الخفيف لفتح البورت فوراً ---
 app = Flask(__name__)
@@ -30,9 +31,6 @@ def handle_photos(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # حفظ الصورة مؤقتة أو معالجتها في الذاكرة
-        image = Image.open(io.BytesIO(downloaded_file))
-        
         # تحويل الصورة إلى PDF باستخدام img2pdf
         pdf_bytes = img2pdf.convert(downloaded_file)
         
@@ -43,9 +41,13 @@ def handle_photos(message):
         bot.reply_to(message, f"حدث خطأ أثناء المعالجة: {e}")
 
 # تشغيل البوت في خلفية الكود باستخدام خيط منفصل (Thread)
-import threading
 def run_bot():
     print("Bot is starting polling...")
+    # إزالة أي ويب هوك قديم أو جلسة سابقة لمنع حدوث خطأ التداخل 409
+    try:
+        bot.remove_webhook()
+    except:
+        pass
     bot.infinity_polling()
 
 bot_thread = threading.Thread(target=run_bot)
