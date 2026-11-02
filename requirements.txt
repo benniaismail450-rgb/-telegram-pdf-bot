@@ -1,0 +1,3 @@
+pyTelegramBotAPI
+img2pdf
+Pillow
