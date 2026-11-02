@@ -1,47 +1,37 @@
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import telebot
-import img2pdf
 
-# توكن البوت الجديد الخاص بتحويل الصور إلى PDF
-TOKEN = '9189528366:AAE0LTM-26urghvNYXr7nagmrEfSNPJ3d3s'
+# --- 1. خادم ويب وهمي لتلبية شروط Port Binding الخاصة بمنصة Render ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running!")
+
+def run_web_server():
+    # Render يزودنا برقم البورت عبر المتغير البيئي PORT، وإذا لم يتوفر نستخدم 10000
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    print(f"Web server running on port {port}")
+    server.serve_forever()
+
+# تشغيل خادم الويب في خلفية الكود (Thread منفصل)
+web_thread = threading.Thread(target=run_web_server)
+web_thread.daemon = True
+web_thread.start()
+
+# --- 2. كود بوت تيليجرام الخاص بك ---
+TOKEN = "YOUR_BOT_TOKEN"  # استبدل هذا بتوكن البوت الخاص بك
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "أهلاً بك! أرسل لي أي صورة وسأقوم بتحويلها فوراً إلى ملف PDF 📄✨")
+    bot.reply_to(message, "مرحباً بك! أرسل لي الصور وسأقوم بتحويلها إلى ملف PDF.")
 
-@bot.message_handler(content_types=['photo'])
-def handle_image(message):
-    try:
-        # إخبار المستخدم بأن العمل جاري
-        msg = bot.reply_to(message, "⏳ جاري تحويل الصورة إلى PDF...")
-        
-        # تحميل الصورة المرسلة بأعلى جودة متاحة
-        fileID = message.photo[-1].file_id
-        file_info = bot.get_file(fileID)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        image_path = "temp_image.jpg"
-        pdf_path = "converted_document.pdf"
-        
-        with open(image_path, 'wb') as new_file:
-            new_file.write(downloaded_file)
-        
-        # تحويل الصورة إلى PDF باستخدام مكتبة img2pdf
-        with open(pdf_path, "wb") as f:
-            f.write(img2pdf.convert(image_path))
-        
-        # إرسال ملف الـ PDF الناتج إلى المستخدم
-        with open(pdf_path, 'rb') as pdf_file:
-            bot.send_document(message.chat.id, pdf_file, caption="✨ تم تحويل الصورة إلى PDF بنجاح!")
-        
-        # حذف الملفات المؤقتة من السيرفر لتنظيف المساحة
-        os.remove(image_path)
-        os.remove(pdf_path)
-        
-    except Exception as e:
-        bot.reply_to(message, f"عذراً، حدث خطأ أثناء التحويل: {e}")
+# يمكنك إضافة باقي أوامر ومعالجات الصور الخاصة بك هنا...
 
-# تشغيل البوت باستمرار
-print("PDF Bot is running...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    print("Bot is starting polling...")
+    bot.infinity_polling()
