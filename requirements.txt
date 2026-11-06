@@ -1,4 +1,4 @@
 pyTelegramBotAPI
-img2pdf
-Pillow
 Flask
+Pillow
+img2pdf
