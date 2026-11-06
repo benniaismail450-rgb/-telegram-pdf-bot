@@ -12,7 +12,10 @@ bot = telebot.TeleBot(TOKEN)
 
 app = Flask(__name__)
 
-# قاموس مؤقت لتخزين مسارات الصور لكل مستخدم حسب الـ Chat ID
+# معرف القناة الخاصة بك للاشتراك الإجباري
+CHANNEL_USERNAME = "@bot1234569"
+
+# قاموس مؤقت لتخزين مسارات الصور والمؤقتات لكل مستخدم
 user_images = {}
 user_timers = {}
 
@@ -30,33 +33,72 @@ def webhook():
 def home():
     return "Bot is alive and running!"
 
+# دالة التحقق من اشتراك المستخدم في القناة
+def check_subscription(user_id):
+    try:
+        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        if member.status in ['member', 'administrator', 'creator']:
+            return True
+    except Exception as e:
+        print(f"Error checking subscription: {e}")
+    return False
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "مرحباً بك! أرسل لي عدة صور دفعة واحدة وسأقوم بجمعها وترتيبها في ملف PDF واحد.")
+    user_id = message.from_user.id
+    
+    # فحص الاشتراك الإجباري
+    if not check_subscription(user_id):
+        markup = telebot.types.InlineKeyboardMarkup()
+        btn_channel = telebot.types.InlineKeyboardButton("📢 اشترك في القناة", url="https://t.me/bot1234569")
+        btn_check = telebot.types.InlineKeyboardButton("✅ لقد انضممت، تحقق", callback_data="check_sub")
+        markup.add(btn_channel)
+        markup.add(btn_check)
+        
+        bot.reply_to(message, "🚨 **عذراً يا إسماعيل!** لاستخدام هذا البوت، يجب عليك الانضمام إلى قناتنا أولاً:\n\n🔗 https://t.me/bot1234569", 
+                     reply_markup=markup, parse_mode="Markdown")
+        return
+
+    bot.reply_to(message, "مرحباً بك يا إسماعيل! أرسل لي عدة صور دفعة واحدة وسأقوم بجمعها وترتيبها في ملف PDF واحد.")
+
+# التعامل مع زر التحقق من الاشتراك
+@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+def callback_query(call):
+    user_id = call.from_user.id
+    if check_subscription(user_id):
+        bot.answer_callback_query(call.id, "✅ شكراً لاشتراكك! يمكنك الآن استخدام البوت.")
+        bot.send_message(call.id, "أهلاً بك مجدداً! أرسل لي الصور الآن لدمجها في ملف PDF.")
+    else:
+        bot.answer_callback_query(call.id, "❌ لم تقم بالانضمام للقناة بعد!", show_alert=True)
 
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
+    user_id = message.from_user.id
+    
+    # التحقق من الاشتراك قبل استقبال الصور أيضاً
+    if not check_subscription(user_id):
+        markup = telebot.types.InlineKeyboardMarkup()
+        btn_channel = telebot.types.InlineKeyboardButton("📢 اشترك في القناة", url="https://t.me/bot1234569")
+        markup.add(btn_channel)
+        bot.reply_to(message, "🚨 يجب عليك الاشتراك في القناة أولاً لتتمكن من إرسال الصور وتحويلها:\n\n🔗 https://t.me/bot1234569", reply_markup=markup)
+        return
+
     chat_id = message.chat.id
     
     try:
-        # تنزيل الصورة بأعلى دقة
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # فتح الصورة وتحويلها إلى صيغة RGB وحفظها مؤقتاً بصيغة PNG أو JPEG
         image = Image.open(io.BytesIO(downloaded_file)).convert('RGB')
         
-        # إنشاء مجلد مؤقت للمستخدم إذا لمש يكن موجوداً
         os.makedirs(f"temp_{chat_id}", exist_ok=True)
         img_path = f"temp_{chat_id}/{time.time()}.jpg"
         image.save(img_path, "JPEG")
         
-        # إضافة مسار الصورة لقائمة المستخدم
         if chat_id not in user_images:
             user_images[chat_id] = []
         user_images[chat_id].append(img_path)
         
-        # إعادة ضبط المؤقت: الانتظار لمدة 3 ثوانٍ بعد آخر صورة لضمان وصول كل الصور الدفعة الواحدة
         if chat_id in user_timers:
             user_timers[chat_id].cancel()
             
@@ -74,14 +116,11 @@ def process_and_send_pdf(chat_id, message):
     try:
         bot.send_message(chat_id, "⏳ جاري دمج الصور وتحويلها إلى ملف PDF واحد...")
         
-        # ترتيب الصور حسب وقت إرسالها
         images_list = sorted(user_images[chat_id])
         
-        # تحويل جميع الصور إلى ملف PDF واحد باستخدام img2pdf
         with open(f"output_{chat_id}.pdf", "wb") as f:
             f.write(img2pdf.convert(images_list))
             
-        # إرسال ملف الـ PDF للمستخدم
         with open(f"output_{chat_id}.pdf", "rb") as f:
             bot.send_document(chat_id, f, visible_file_name="images_collection.pdf")
             
@@ -89,7 +128,6 @@ def process_and_send_pdf(chat_id, message):
         bot.send_message(chat_id, f"حدث خطأ أثناء الدمج: {e}")
         
     finally:
-        # تنظيف الملفات المؤقتة وحذفها من الخادم
         if chat_id in user_images:
             for img_path in user_images[chat_id]:
                 if os.path.exists(img_path):
